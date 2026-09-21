@@ -1,81 +1,60 @@
 # Semantic OS
 
-Надстройка над Windows, адресующая файлы по смыслу запроса, а не по пути.
+**English** | [Русский](README.ru.md)
 
-* `SPEC.md` — исходное видение (разделы 1–2 в силе, 3–8 заменены).
-* `ARCHITECTURE.md` — архитектура и план по этапам. **Читать это.**
+A Windows add-on that addresses files by the meaning of a query rather than by path.
 
-Одна внешняя зависимость — `pypdf` (`pip install -r requirements.txt`).
+* `SPEC.md` — the original vision (sections 1–2 still hold, 3–8 are superseded).
+* `ARCHITECTURE.md` — architecture and stage-by-stage plan. **Read this one.**
 
-## Запуск
+Both documents are in Russian.
+
+One external dependency — `pypdf` (`pip install -r requirements.txt`).
+
+## Running it
 
 ```
-python -m semos init          # создать базу и корень индексации
-python -m semos index         # просканировать корень
-python -m semos find "запрос"
-python -m semos eval          # прогнать замороженный набор
+python -m semos init          # create the database and the indexing root
+python -m semos index         # scan the root
+python -m semos find "query"
+python -m semos eval          # run the frozen query set
 python -m semos stats
-python -m semos serve         # резидентный процесс: хоткей Ctrl+Alt+J + окно ввода
-python tests\smoke.py         # проверка механики на синтетике
+python -m semos serve         # resident process: Ctrl+Alt+J hotkey + input box
+python tests\smoke.py         # check the mechanics on synthetic data
 ```
 
-База и конфиг — в `%LOCALAPPDATA%\SemanticOS\` (не в проекте: он в OneDrive).
-Корень индексации задаётся через `python -m semos init --root <путь>`.
+The database and config live in `%LOCALAPPDATA%\SemanticOS\`, not in the project folder (the project sat in OneDrive, and SQLite in WAL mode under file sync means constant re-uploads).
+Set the indexing root with `python -m semos init --root <path>`.
 
-## Что сейчас делает
+## What it does now
 
-Находит файл по формулировке на естественном языке, используя четыре источника
-сигнала, слитых через Reciprocal Rank Fusion:
+It finds a file from a natural-language description using four signal sources merged with Reciprocal Rank Fusion:
 
-| генератор | сигнал |
+| generator | signal |
 |---|---|
-| `content` | bm25 по тексту чанков (FTS5 + русский стеммер) |
-| `name` | bm25 по имени файла |
-| `recency` | приоритет свежести, только среди уже найденного |
-| `alias` | выученные имена (пусто до M3) |
+| `content` | bm25 over chunk text (FTS5 + Russian stemmer) |
+| `name` | bm25 over the file name |
+| `recency` | recency priority, only among files already found |
+| `alias` | learned names (empty until M3) |
 
-Индексируется **каждый** файл в корне: имя и метаданные всегда, содержимое —
-где извлекается (`.txt`, `.md`, `.docx`, `.pdf` с текстовым слоем и текстовые
-форматы). Секреты (`.env`, ключи, `*.kdbx`) исключены, облачные плейсхолдеры
-OneDrive читаются только по имени, чтобы не провоцировать скачивание.
+**Every** file under the root is indexed: name and metadata always, content where it can be extracted (`.txt`, `.md`, `.docx`, `.pdf` with a text layer, and plain-text formats). Secrets (`.env`, keys, `*.kdbx`) are excluded, and OneDrive cloud placeholders are indexed by name only, so as not to trigger downloads.
 
-`python -m semos serve` поднимает резидентный процесс: глобальный хоткей
-`Ctrl+Alt+J` открывает окно ввода поверх всех окон, Enter открывает первый
-результат (или выбранный цифрой), Tab показывает файл в Проводнике не
-открывая его. Открытие файла проходит через `semos/actions.py` — матрицу
-(глагол, класс объекта) с проверкой, что путь не выходит за пределы корня
-индексации (включая обход через symlink/junction).
+`python -m semos serve` starts a resident process: the global hotkey `Ctrl+Alt+J` opens an input box on top of all windows, Enter opens the first result (or the one picked by number), and Tab shows the file in Explorer without opening it. Opening a file goes through `semos/actions.py` — a (verb, object class) matrix that checks the path does not escape the indexing root (including via symlinks/junctions).
 
-## Статус
+## Status
 
-**M0.** Прогнан на реальной папке Downloads (358 файлов, 27 пар, собранных
-интервью с пользователем). Сам набор в репозиторий не входит: в нём реальные
-имена личных файлов. Формат и методология сбора — в `eval/queries.example.tsv`;
-чтобы прогнать `eval` на своей папке, скопируй его в `eval/queries.tsv` и
-впиши свои пары.
-Результат: **recall@3 = 74%**, гейт (80%) формально не пройден, но по
-решению пользователя принят как честный базовый результат: оставшиеся
-промахи — не баги ранжирования, а границы чистого лексического поиска
-(кросс-языковые имена файлов, семантические разрывы между содержимым и
-смыслом запроса, пара неподдержанных форматов). Векторный слой (M4)
-отложен.
+**M0.** Run on a real Downloads folder (358 files, 27 query pairs collected by interviewing the user). The set itself is not in the repository because it contains real names of personal files. The format and collection method are in `eval/queries.example.tsv`; to run `eval` on your own folder, copy it to `eval/queries.tsv` and add your own pairs.
+Result: **recall@3 = 74%**. The 80% gate was formally missed, but the user accepted it as an honest baseline: the remaining misses are not ranking bugs but the limits of purely lexical search (cross-language file names, semantic gaps between content and the query's meaning, a couple of unsupported formats). The vector layer (M4) is postponed.
 
-**M1 — в разработке.** Резидентный процесс, хоткей, окно ввода, журнал
-событий, безопасное открытие файлов — реализовано и покрыто тестами
-настолько, насколько это возможно без живого нажатия клавиш (регистрация
-хоткея, конфликты, рендер окна, show/hide, запись событий — все проверены
-программно). **Реальное нажатие `Ctrl+Alt+J` живым пользователем не
-проверялось** — это нужно сделать вручную первым делом.
+**M1 — in progress.** The resident process, hotkey, input box, event log and safe file opening are implemented and tested as far as possible without a live key press (hotkey registration, conflicts, window rendering, show/hide and event logging are all checked programmatically). **A real `Ctrl+Alt+J` press by a live user has not been tested** — that is the first thing to do by hand.
 
-### Автозапуск (после проверки вручную)
+### Autostart (after checking it by hand)
 
-Не автоматизировано намеренно — это меняет поведение системы при входе:
+Deliberately not automated, because it changes system behavior at login:
 
 1. `Win+R` → `shell:startup`
-2. Ярлык на `pythonw.exe -m semos serve`, рабочая директория — папка проекта
-   (`pythonw`, не `python`, — без консольного окна).
+2. A shortcut to `pythonw.exe -m semos serve` with the project folder as the working directory (`pythonw`, not `python`, so there is no console window).
 
-## Что делать дальше
+## Next step
 
-Запусти `python -m semos serve` и нажми `Ctrl+Alt+J` — если окно не
-появляется или падает, это первое, что нужно починить в M1.
+Run `python -m semos serve` and press `Ctrl+Alt+J`. If the window does not appear or crashes, that is the first thing to fix in M1.

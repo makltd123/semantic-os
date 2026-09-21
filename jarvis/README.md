@@ -1,154 +1,133 @@
 # jarvis
 
-Голосовая надстройка над Windows: удерживаешь клавишу, говоришь обычной фразой —
-компьютер делает то, что ты имел в виду.
+**English** | [Русский](README.ru.md)
 
-Исследовательский прототип, не продукт. Замысел, гипотеза и все замеры — в
-[RESEARCH_LOG.md](RESEARCH_LOG.md). Самостоятельная ветка: индексатор семантической ФС
-([`semos/`](../semos/)) не используется и не затрагивается.
+A voice add-on for Windows: hold a key, say an ordinary phrase, and the computer does what you meant.
 
-## Идея в одну строку
+It understands Russian speech; the example phrases below are in Russian with translations. The research log and architecture notes are in Russian.
 
-Голосовой ассистент отображает **фразу → функцию**, поэтому требует точных команд.
-Здесь — **фраза × состояние системы → действие**.
+A research prototype, not a product. The idea, the hypothesis and all measurements are in [RESEARCH_LOG.md](RESEARCH_LOG.md). A separate branch of work: the semantic file-system indexer ([`semos/`](../semos/)) is neither used nor touched.
 
-«Сделай потише» неразрешимо без знания, что сейчас играет. Значит, знание о том, что
-происходит на машине, и есть содержание системы, а не понимание языка само по себе.
+## The idea in one line
 
-## Установка
+A voice assistant maps **phrase → function**, which is why it needs exact commands.
+This one maps **phrase × system state → action**.
+
+"Turn it down" is unresolvable without knowing what is playing right now. So knowledge of what is happening on the machine is the actual content of the system, not language understanding on its own.
+
+## Installation
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Нужен установленный и авторизованный Claude Code CLI (`claude`) — через него идёт
-разбор новых формулировок. API-ключ не требуется.
+You need the Claude Code CLI (`claude`) installed and signed in — new phrasings are parsed through it. No API key is required.
 
-При первом запуске скачается модель Whisper `base` (~145 МБ).
+The Whisper `base` model (~145 MB) is downloaded on first run.
 
-## Запуск
+## Running it
 
 ```powershell
-# голосовой режим: удерживай правый Ctrl и говори
+# voice mode: hold right Ctrl and speak
 python -m jarvis
 
-# те же самые фразы, но текстом — без микрофона
+# the same phrases as text — no microphone
 python -m jarvis --text "сделай потише" "открой браузер"
 
-# интерактивно текстом
+# interactive text mode
 python -m jarvis --repl
 
-# что система знает о машине прямо сейчас
+# what the system knows about the machine right now
 python -m jarvis --state
 
-# статистика: что выучено и какие задержки
+# stats: what has been learned and the latencies
 python -m jarvis --stats
 ```
 
-Полезные флаги: `--no-llm` (только быстрый путь), `--silent` (без голоса),
-`--model tiny|base|small`.
+Useful flags: `--no-llm` (fast path only), `--silent` (no voice), `--model tiny|base|small`.
 
-## Как устроено
+## How it works
 
 ```
-голос ──> STT ──> снимок состояния ──> разрешение намерения ──> действие ──> голос + плашка
-          ~1.0s        ~45ms        быстрый ~20ms / LLM 0.7-4s     ~10ms
+voice ──> STT ──> state snapshot ──> intent resolution ──> action ──> voice + HUD
+          ~1.0s       ~45ms         fast ~20ms / LLM 0.7-4s   ~10ms
 ```
 
-Разрешение намерения — лестница из трёх локальных ступеней и модели в конце:
+Intent resolution is a ladder of three local steps with a model at the end:
 
-1. **Точное совпадение** по нормализованной фразе — доли миллисекунды.
-2. **Нечёткое** (rapidfuzz) — ловит перестановки и вводные слова: «потише пожалуйста».
-3. **Семантическое** (эмбеддинги MiniLM) — ловит другие слова: «который час» ≈
-   «сколько времени». Около 20 мс.
-4. **LLM** — только когда все три промахнулись. Результат **записывается в быстрый путь**,
-   так что та же формулировка второй раз разбирается мгновенно.
+1. **Exact match** on the normalized phrase — a fraction of a millisecond.
+2. **Fuzzy** (rapidfuzz) — catches reordering and filler words: «потише пожалуйста» ("quieter please").
+3. **Semantic** (MiniLM embeddings) — catches different words: «который час» ≈ «сколько времени» (both "what time is it"). About 20 ms.
+4. **LLM** — only when all three miss. The result is **written into the fast path**, so the same phrasing is resolved instantly the second time.
 
-### Почему семантический слой устроен сложнее, чем «взять ближайшее по смыслу»
+### Why the semantic layer is more complex than "take the nearest by meaning"
 
-Эмбеддинги кодируют *тему*, а не *направление*: «потише» и «погромче» для них почти
-одно и то же. Наивный поиск ближайшего отправлял «приглуши» в `volume_up` со сходством
-0.80 — то есть уверенно делал противоположное.
+Embeddings encode *topic*, not *direction*: to them "quieter" and "louder" are almost the same thing. A naive nearest-neighbor search sent «приглуши» ("turn it down a bit") to `volume_up` with 0.80 similarity — that is, it confidently did the opposite.
 
-Поэтому срабатывание требует не только сходства (≥ 0.5), но и **отрыва от второго места
-(≥ 0.3)**. Маленький отрыв означает «две разные команды выглядят одинаково» — и фраза
-уходит к модели. Это убрало все ошибки ценой того, что часть фраз идёт длинным путём.
+So a match requires not only similarity (≥ 0.5) but also a **margin over the runner-up (≥ 0.3)**. A small margin means "two different commands look the same", and the phrase goes to the model. This removed all errors, at the cost of sending some phrases down the long path.
 
-Та же болезнь есть и по второй оси: в короткой фразе существительное перевешивает глагол,
-поэтому «переключись на браузер» тянется к выученному «открой браузер». Отрыв ловит и это,
-но по-настоящему лечится оно разделением действия и объекта — этого здесь пока нет.
+The same problem exists along a second axis: in a short phrase the noun outweighs the verb, so «переключись на браузер» ("switch to the browser") gets pulled towards the learned «открой браузер» ("open the browser"). The margin catches this too, but the real cure is separating the action from the object — which is not here yet.
 
-Плюс **якоря**: у каждого действия есть канонические формулировки, которые участвуют в
-сравнении, но никогда не срабатывают сами. Без них полупустой кэш опасен: если выучено
-только «потише», то «прибавь звук» не с чем сравнивать, и он уедет в `volume_down`.
+Plus **anchors**: every action has canonical phrasings that take part in comparisons but never fire on their own. Without them a half-empty cache is dangerous: if only "quieter" has been learned, "louder" has nothing to compare against and drifts to `volume_down`.
 
-### Кэш хранит действие, а не привязку
+### The cache stores the action, not the binding
 
-«Потише» помнится как `volume_down`; какое именно приложение приглушить, решается в момент
-выполнения по свежему состоянию. Иначе система со временем начала бы уверенно делать не то —
-самый скверный отказ для голоса, потому что он молчаливый.
+«Потише» ("quieter") is remembered as `volume_down`; which application to turn down is decided at execution time from the fresh state. Otherwise the system would, over time, start confidently doing the wrong thing — the worst failure for voice, because it is silent.
 
-### Какая модель отвечает на новые фразы
+### Which model answers new phrases
 
-Переключается переменной `JARVIS_LLM`:
+Switched with the `JARVIS_LLM` variable:
 
-- `claude` — через установленный Claude Code CLI, ключ не нужен. Медленнее, точнее.
-- `mistral` — по HTTPS, нужен `MISTRAL_API_KEY`. Быстрее в несколько раз.
+- `claude` — through the installed Claude Code CLI, no key needed. Slower, more accurate.
+- `mistral` — over HTTPS, needs `MISTRAL_API_KEY`. Several times faster.
 
-Модель Mistral задаётся `JARVIS_MISTRAL_MODEL`. Ключ удобно хранить в пользовательской
-переменной окружения (`setx MISTRAL_API_KEY "..."`), чтобы он не попал ни в git, ни в
-облачную синхронизацию папки.
+The Mistral model is set with `JARVIS_MISTRAL_MODEL`. The key is best kept in a user environment variable (`setx MISTRAL_API_KEY "..."`) so it ends up neither in git nor in a cloud-synced folder.
 
-## Что умеет
+## What it can do
 
-| Действие | Пример фразы |
+| Action | Example phrase |
 |---|---|
-| `volume_down` / `volume_up` | «сделай потише» — убавит то, что звучит, а не общую громкость |
-| `volume_set`, `mute` | «громкость на тридцать», «выключи звук» |
-| `window_focus` | «переключись на браузер» |
-| `window_close`, `minimize_all` | «закрой телеграм», «сверни всё» |
-| `app_launch` | «открой музыку» — ищет по ярлыкам меню «Пуск» |
-| `open_recent` | «открой то, что я вчера редактировал» |
-| `focus_mode` | «мне надо сосредоточиться» — свернёт и заглушит мессенджеры |
-| `keep_awake` | «сделай, чтобы экран не гас» |
-| `lock_screen` | «заблокируй компьютер» |
-| `say_state` | «сколько времени», «что играет», «что в буфере» |
+| `volume_down` / `volume_up` | «сделай потише» ("turn it down") — lowers whatever is playing, not the master volume |
+| `volume_set`, `mute` | «громкость на тридцать» ("volume to thirty"), «выключи звук» ("mute") |
+| `window_focus` | «переключись на браузер» ("switch to the browser") |
+| `window_close`, `minimize_all` | «закрой телеграм» ("close Telegram"), «сверни всё» ("minimize everything") |
+| `app_launch` | «открой музыку» ("open music") — searches Start menu shortcuts |
+| `open_recent` | «открой то, что я вчера редактировал» ("open what I was editing yesterday") |
+| `focus_mode` | «мне надо сосредоточиться» ("I need to focus") — minimizes and mutes messengers |
+| `keep_awake` | «сделай, чтобы экран не гас» ("keep the screen on") |
+| `lock_screen` | «заблокируй компьютер» ("lock the computer") |
+| `say_state` | «сколько времени» ("what time is it"), «что играет» ("what's playing"), «что в буфере» ("what's in the clipboard") |
 
-## Плашка на экране
+## The on-screen HUD
 
-Показывает всю цепочку: что услышано → каким путём разобрано → что сделано, с
-миллисекундами по стадиям. Цвет полосы: зелёный — кэш, жёлтый — LLM, красный — промах.
+It shows the whole chain: what was heard → how it was resolved → what was done, with milliseconds per stage. Bar color: green — cache, yellow — LLM, red — miss.
 
-Это не украшение. Вторая по частоте причина, по которой люди бросают голосовые
-интерфейсы, — непонимание, что система поняла и на каком звене сломалась.
+This is not decoration. The second most common reason people abandon voice interfaces is not understanding what the system understood and at which link it broke.
 
-## Исправление ошибок голосом
+## Correcting mistakes by voice
 
-Если разобрало неверно, скажи **«не то»** или **«забудь»** — ассоциация удалится из кэша,
-и в следующий раз фраза снова пойдёт через LLM. Система, которая учится, обязана быть
-исправляемой вслух, иначе её ошибки становятся постоянными и незаметными.
+If a phrase was resolved wrongly, say **«не то»** ("not that") or **«забудь»** ("forget it") — the association is removed from the cache, and next time the phrase goes through the LLM again. A system that learns must be correctable out loud, otherwise its mistakes become permanent and invisible.
 
-## Данные
+## Data
 
-`data/intent_cache.json` — выученные намерения, читаемый JSON, можно править руками.
-`data/turns.jsonl` — журнал ходов с таймингами по стадиям; основа для `--stats`.
+`data/intent_cache.json` — learned intents, readable JSON, can be edited by hand.
+`data/turns.jsonl` — a log of turns with per-stage timings; the basis for `--stats`.
 
-Обе папки в `.gitignore`: трейс может содержать кусок буфера обмена.
+Both are in `.gitignore`: a trace can contain a piece of the clipboard.
 
-## Воспроизвести замеры
+## Reproducing the measurements
 
-Все цифры из [RESEARCH_LOG.md](RESEARCH_LOG.md) получены этими скриптами:
+Every number in [RESEARCH_LOG.md](RESEARCH_LOG.md) was produced by these scripts:
 
 ```powershell
-python bench/bench_stt.py tiny base        # E1  — задержка распознавания
-python bench/bench_llm.py 1                # E2  — обычный и облегчённый запуск CLI
-python bench/bench_llm_phases.py           # E2b — куда уходит время внутри вызова
-python bench/bench_cache.py --matcher pipeline   # E3/E4 — покрытие быстрого пути
-python bench/bench_mistral.py              # E5  — модели Mistral
-python bench/bench_mistral.py ministral-3b-latest 1.3 hold   # E6 — отложенный набор
-python bench/bench_h1.py                   # H1  — ускоряется ли система по мере обучения
-python tests/test_semantic.py              # E4b — дыра полупустого кэша и якоря
+python bench/bench_stt.py tiny base        # E1  — speech recognition latency
+python bench/bench_llm.py 1                # E2  — regular vs lightweight CLI launch
+python bench/bench_llm_phases.py           # E2b — where the time goes inside a call
+python bench/bench_cache.py --matcher pipeline   # E3/E4 — fast-path coverage
+python bench/bench_mistral.py              # E5  — Mistral models
+python bench/bench_mistral.py ministral-3b-latest 1.3 hold   # E6 — held-out set
+python bench/bench_h1.py                   # H1  — does the system get faster as it learns
+python tests/test_semantic.py              # E4b — the half-empty cache hole and anchors
 ```
 
-`bench_h1.py` и `test_semantic.py` только разрешают намерения и **не выполняют
-действия** — иначе бенчмарк заблокировал бы экран на фразе «я отойду».
+`bench_h1.py` and `test_semantic.py` only resolve intents and **do not execute actions** — otherwise the benchmark would lock the screen on the phrase «я отойду» ("I'll step away").

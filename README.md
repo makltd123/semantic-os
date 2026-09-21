@@ -1,14 +1,16 @@
 # Semantic OS
 
-Исследовательские прототипы надстроек над Windows, где компьютером управляют смыслом, а не путями к файлам и точными командами.
+**English** | [Русский](README.ru.md)
 
-| Подпроект | Что это |
+Research prototypes of Windows add-ons where you drive the computer by meaning rather than by file paths and exact commands.
+
+| Subproject | What it is |
 |---|---|
-| [`semos/`](semos/) | **Поиск файлов по смыслу запроса.** Пишешь «задание по статистике, апрель-май» вместо пути. Индекс в SQLite FTS5 с русским стеммером; четыре сигнала (текст, имя файла, свежесть, выученные имена) сливаются через Reciprocal Rank Fusion. Глобальный хоткей `Ctrl+Alt+J` открывает окно поиска поверх всех окон. На реальной папке из 358 файлов recall@3 = 74%. |
-| [`jarvis/`](jarvis/) | **Голосовой ассистент, который учитывает состояние системы.** «Сделай потише» убавит то, что сейчас звучит, а не общую громкость. Фраза разбирается по лестнице: точное совпадение → нечёткое → эмбеддинги → LLM. Ответ LLM запоминается, и та же фраза во второй раз разбирается мгновенно. |
+| [`semos/`](semos/) | **File search by the meaning of a query.** You type "statistics assignment, April–May" instead of a path. SQLite FTS5 index with a Russian stemmer; four signals (content, file name, recency, learned names) are merged with Reciprocal Rank Fusion. A global hotkey `Ctrl+Alt+J` opens a search box on top of all windows. recall@3 = 74% on a real folder of 358 files. |
+| [`jarvis/`](jarvis/) | **A voice assistant that takes system state into account.** "Turn it down" lowers whatever is playing right now, not the master volume. A phrase is resolved through a ladder: exact match → fuzzy → embeddings → LLM. The LLM's answer is remembered, so the same phrase is resolved instantly the second time. |
 
-Подпроекты независимы: у каждого свой README, свои зависимости и свой запуск. Оба работают только на Windows.
+The subprojects are independent: each has its own README, dependencies and way to run. Both are Windows-only and built for Russian (queries, speech, stemming). Design notes and research logs inside the subprojects are in Russian.
 
-## Лицензия
+## License
 
 [MIT](LICENSE)
