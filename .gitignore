@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.kilo/
+
+# jarvis: learned intents and turn traces (can hold clipboard text), downloaded models
+jarvis/data/
+# jarvis: synthetic benchmark audio, regenerated on demand
+jarvis/bench/audio/
+
+# semos: the eval set was built on the author's own Downloads folder and holds real file names
+semos/eval/queries.tsv

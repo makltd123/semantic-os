@@ -1,0 +1,11 @@
+# personal data: learned intents and turn traces (traces can hold clipboard text)
+data/
+
+# secrets
+.env
+
+# synthetic benchmark audio, regenerated on demand
+bench/audio/
+
+__pycache__/
+*.pyc
