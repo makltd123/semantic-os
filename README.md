@@ -14,3 +14,7 @@ The subprojects are independent: each has its own README, dependencies and way t
 ## License
 
 [MIT](LICENSE)
+
+---
+
+Author: [Fedor Makovskiy](https://fedor.alqira.ru), AI developer. Services and projects with quality metrics: [fedor.alqira.ru](https://fedor.alqira.ru).
